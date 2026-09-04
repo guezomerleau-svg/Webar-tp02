@@ -21,116 +21,128 @@
     // COMPOSANT CUSTOM : CONTROLEUR DU JOUEUR (Exercices 2, 4, 5)
     // -----------------------------------------------------------------
     AFRAME.registerComponent('player-controller', {
-        schema: {
-            speed: { type: 'number', default: 12 },
-            accel: { type: 'number', default: 12 },
-            decel: { type: 'number', default: 18 },
-            jumpForce: { type: 'number', default: 10 }
-        },
-        init: function () {
-            this.keys = { w: false, a: false, s: false, d: false, space: false };
-            this.isGrounded = false;
-            this.currentVel = new THREE.Vector3(0, 0, 0);
+    schema: {
+        speed: { type: 'number', default: 12 },
+        accel: { type: 'number', default: 12 },
+        decel: { type: 'number', default: 18 },
+        jumpForce: { type: 'number', default: 10 }
+    },
+    init: function () {
+        this.keys = { w: false, a: false, s: false, d: false, space: false };
+        this.isGrounded = false;
+        this.currentVel = new THREE.Vector3(0, 0, 0);
 
-            // Gestion des entrées clavier (support ZQSD et WASD)
-            window.addEventListener('keydown', (e) => {
-                const key = e.key.toLowerCase();
-                if (key === 'w' || key === 'z') this.keys.w = true;
-                if (key === 'a' || key === 'q') this.keys.a = true;
-                if (key === 's') this.keys.s = true;
-                if (key === 'd') this.keys.d = true;
-                if (e.code === 'Space') this.keys.space = true;
-            });
+        // Gestion du clavier (Empêche le scroll de page sur Espace)
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'z') this.keys.w = true;
+            if (key === 'a' || key === 'q') this.keys.a = true;
+            if (key === 's') this.keys.s = true;
+            if (key === 'd') this.keys.d = true;
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                this.keys.space = true;
+            }
+        });
 
-            window.addEventListener('keyup', (e) => {
-                const key = e.key.toLowerCase();
-                if (key === 'w' || key === 'z') this.keys.w = false;
-                if (key === 'a' || key === 'q') this.keys.a = false;
-                if (key === 's') this.keys.s = false;
-                if (key === 'd') this.keys.d = false;
-                if (e.code === 'Space') this.keys.space = false;
-            });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key === 'w' || key === 'z') this.keys.w = false;
+            if (key === 'a' || key === 'q') this.keys.a = false;
+            if (key === 's') this.keys.s = false;
+            if (key === 'd') this.keys.d = false;
+            if (e.code === 'Space' || e.key === ' ') {
+                e.preventDefault();
+                this.keys.space = false;
+            }
+        });
 
-            // Exercice 2 : Calcul dynamique de la hauteur initiale pour que le bas du cube touche le sol
-            this.el.addEventListener('body-loaded', () => {
-                const height = this.el.getAttribute('height') || 2;
-                const pos = this.el.getAttribute('position');
-                this.el.body.position.y = height / 2;
-            });
-        },
+        // Repositionnement initial au-dessus du sol
+        this.el.addEventListener('body-loaded', () => {
+            const height = parseFloat(this.el.getAttribute('height')) || 2;
+            this.el.body.position.y = height / 2;
+        });
+    },
 
-        // Vérification dynamique des contacts physiques à chaque frame
-        checkGroundedState: function (body) {
-            if (!body || !body.world) return false;
-            
+    // Détection fiable du contact sol
+    checkGroundedState: function (body) {
+        if (!body) return false;
+
+        const height = parseFloat(this.el.getAttribute('height')) || 2;
+        const halfHeight = height / 2;
+
+        // 1. Détection par position et vitesse verticale faible (sécurité sol)
+        if (body.position.y <= (halfHeight + 0.15) && Math.abs(body.velocity.y) < 0.5) {
+            return true;
+        }
+
+        // 2. Détection par contact physique Cannon.js
+        if (body.world && body.world.contacts) {
             for (let i = 0; i < body.world.contacts.length; i++) {
                 const c = body.world.contacts[i];
                 if (c.bi.id === body.id || c.bj.id === body.id) {
-                    const normal = c.bi.id === body.id ? c.ni : c.ni.negate();
-                    // Si la normale pointe vers le haut, le cube s'appuie sur une surface horizontale
-                    if (normal.y > 0.5) {
-                        return true;
-                    }
+                    // Correction de la direction de la normale
+                    const ny = (c.bi.id === body.id) ? -c.ni.y : c.ni.y;
+                    if (ny > 0.5) return true;
                 }
             }
-            return false;
-        },
-
-        tick: function (time, delta) {
-            const dt = delta / 1000;
-            if (!dt || dt > 0.1) return;
-
-            const body = this.el.body;
-            if (!body) return;
-
-            // Exercice 5 : Bloquer la rotation du cube lors des collisions
-            body.fixedRotation = true;
-            body.updateMassProperties();
-
-            // Exercice 2 : Détection temps réel de la présence au sol
-            this.isGrounded = this.checkGroundedState(body);
-
-            // Récupération de la vue caméra
-            const cameraEl = this.el.sceneEl.camera;
-            if (!cameraEl) return;
-
-            // --- EXERCICE 4 : VECTEURS DE DÉPLACEMENT RELATIFS À LA CAMÉRA ---
-            const forward = new THREE.Vector3();
-            cameraEl.getWorldDirection(forward);
-            forward.y = 0; // Se déplacer uniquement dans le plan horizontal
-            forward.normalize();
-
-            const right = new THREE.Vector3();
-            right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-
-            const inputDir = new THREE.Vector3(0, 0, 0);
-            if (this.keys.w) inputDir.add(forward);
-            if (this.keys.s) inputDir.sub(forward);
-            if (this.keys.d) inputDir.add(right);
-            if (this.keys.a) inputDir.sub(right);
-
-            if (inputDir.lengthSq() > 0) {
-                inputDir.normalize();
-            }
-
-            // --- EXERCICE 2 : ACCÉLÉRATION ET DÉCÉLÉRATION PROGRESSIVES ---
-            const targetVx = inputDir.x * this.data.speed;
-            const targetVz = inputDir.z * this.data.speed;
-
-            const rate = (inputDir.lengthSq() > 0) ? this.data.accel : this.data.decel;
-
-            this.currentVel.x += (targetVx - this.currentVel.x) * Math.min(rate * dt, 1);
-            this.currentVel.z += (targetVz - this.currentVel.z) * Math.min(rate * dt, 1);
-
-            body.velocity.x = this.currentVel.x;
-            body.velocity.z = this.currentVel.z;
-
-            // --- EXERCICES 2 & 5 : SAUT CONDITIONNÉ AU SOL ---
-            if (this.keys.space && this.isGrounded) {
-                body.velocity.y = this.data.jumpForce;
-                this.isGrounded = false;
-            }
         }
+        return false;
+    },
+
+    tick: function (time, delta) {
+        const dt = delta / 1000;
+        if (!dt || dt > 0.1) return;
+
+        const body = this.el.body;
+        if (!body) return;
+
+        // Bloquer la rotation du cube lors des chocs
+        body.fixedRotation = true;
+        body.updateMassProperties();
+
+        // Mettre à jour l'état au sol
+        this.isGrounded = this.checkGroundedState(body);
+
+        // Orientations relatives à la caméra
+        const cameraEl = this.el.sceneEl.camera;
+        if (!cameraEl) return;
+
+        const forward = new THREE.Vector3();
+        cameraEl.getWorldDirection(forward);
+        forward.y = 0;
+        forward.normalize();
+
+        const right = new THREE.Vector3();
+        right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+        const inputDir = new THREE.Vector3(0, 0, 0);
+        if (this.keys.w) inputDir.add(forward);
+        if (this.keys.s) inputDir.sub(forward);
+        if (this.keys.d) inputDir.add(right);
+        if (this.keys.a) inputDir.sub(right);
+
+        if (inputDir.lengthSq() > 0) {
+            inputDir.normalize();
+        }
+
+        // Accélération / Décélération
+        const targetVx = inputDir.x * this.data.speed;
+        const targetVz = inputDir.z * this.data.speed;
+        const rate = (inputDir.lengthSq() > 0) ? this.data.accel : this.data.decel;
+
+        this.currentVel.x += (targetVx - this.currentVel.x) * Math.min(rate * dt, 1);
+        this.currentVel.z += (targetVz - this.currentVel.z) * Math.min(rate * dt, 1);
+
+        body.velocity.x = this.currentVel.x;
+        body.velocity.z = this.currentVel.z;
+
+        // Saut
+        if (this.keys.space && this.isGrounded) {
+            body.velocity.y = this.data.jumpForce;
+            this.isGrounded = false;
+        }
+    }
     });
 
     // -----------------------------------------------------------------
