@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TP02 - Web3D</title>
+    <title>TP02 - Web3D (Exercice 2)</title>
     <style>
         body {
             margin: 0;
@@ -13,14 +13,13 @@
             display: block;
         }
     </style>
-    <!-- Importation de Three.js et OrbitControls via CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
 
 <script>
-    // --- 1. INITIALISATION DE LA SCÈNE, CAMÉRA ET RENDU ---
+    // --- 1. INITIALISATION SCÈNE & CAMÉRA ---
     const scene = new THREE.Scene();
     
     const camera = new THREE.PerspectiveCamera(
@@ -29,11 +28,12 @@
         0.1, 
         1000
     );
-    camera.position.set(0, 5, 10);
+    camera.position.set(0, 8, 12);
+    camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true; // Activer les ombres
+    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
     // --- 2. ÉCLAIRAGE ---
@@ -45,48 +45,140 @@
     dirLight.castShadow = true;
     scene.add(dirLight);
 
-    // --- 3. EXERCICE 1 : CREATION DU PLAN (SOL) ET SKYBOX ---
-    
-    // Chargement des textures via des URLs publiques
+    // --- 3. EXERCICE 1 : PLAN (SOL) & SKYBOX ---
     const textureLoader = new THREE.TextureLoader();
 
-    // A. Texture d'herbe avec répétition pour un rendu propre
     const grassTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
     grassTexture.wrapS = THREE.RepeatWrapping;
     grassTexture.wrapT = THREE.RepeatWrapping;
-    grassTexture.repeat.set(50, 50); // Répéter la texture sur le grand plan
+    grassTexture.repeat.set(50, 50);
 
-    // Création du plan horizontal (sol)
     const planeSize = 100;
     const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
     const planeMat = new THREE.MeshStandardMaterial({ map: grassTexture });
     const plane = new THREE.Mesh(planeGeo, planeMat);
-    plane.rotation.x = -Math.PI / 2; // Orienter le plan à l'horizontale
+    plane.rotation.x = -Math.PI / 2;
     plane.receiveShadow = true;
     scene.add(plane);
 
-    // B. Skybox (Image panoramique de ciel)
     const skyTexture = textureLoader.load('https://threejs.org/examples/textures/22944123048_24a3b1029d_o.jpg');
     const skyGeo = new THREE.SphereGeometry(500, 60, 40);
     const skyMat = new THREE.MeshBasicMaterial({
         map: skyTexture,
-        side: THREE.BackSide // Afficher la texture à l'intérieur de la sphère
+        side: THREE.BackSide
     });
     const skybox = new THREE.Mesh(skyGeo, skyMat);
     scene.add(skybox);
 
-    // --- 4. REDIMENSIONNEMENT FENÊTRE ---
+    // --- 4. EXERCICE 2 : CREATION DU CUBE (JOUEUR) ---
+    const cubeSize = 2;
+    const cubeGeo = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
+    const cubeMat = new THREE.MeshStandardMaterial({ color: 0x3498db });
+    const player = new THREE.Mesh(cubeGeo, cubeMat);
+    
+    // Positionnement exact sur le plan (hauteur / 2)
+    player.position.set(0, cubeSize / 2, 0);
+    player.castShadow = true;
+    scene.add(player);
+
+    // --- 5. PHYSIQUE ET DEPLACEMENT ---
+    const keys = { w: false, a: false, s: false, d: false, space: false };
+
+    // Écouteurs de clavier
+    window.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'z') keys.w = true;
+        if (key === 'a' || key === 'q') keys.a = true;
+        if (key === 's') keys.s = true;
+        if (key === 'd') keys.d = true;
+        if (e.code === 'Space') keys.space = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'z') keys.w = false;
+        if (key === 'a' || key === 'q') keys.a = false;
+        if (key === 's') keys.s = false;
+        if (key === 'd') keys.d = false;
+        if (e.code === 'Space') keys.space = false;
+    });
+
+    // Variables de mouvement
+    const velocity = new THREE.Vector3(0, 0, 0);
+    const acceleration = 30; // Accélération au sol
+    const friction = 5;      // Frottement pour la décélération
+    const maxSpeed = 10;     // Vitesse maximale
+    const gravity = -25;     // Gravité
+    const jumpVelocity = 12; // Force de saut
+    let isGrounded = true;
+
+    const clock = new THREE.Clock();
+
+    // --- 6. REDIMENSIONNEMENT ---
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // --- 5. BOUCLE DE RENDU ---
+    // --- 7. BOUCLE DE RENDU & MISE À JOUR DU MOUVEMENT ---
     function animate() {
         requestAnimationFrame(animate);
+
+        const delta = clock.getDelta();
+
+        // Direction souhaitée en fonction des touches
+        const moveDirection = new THREE.Vector3(0, 0, 0);
+        if (keys.w) moveDirection.z -= 1; // Avancer (vers -Z)
+        if (keys.s) moveDirection.z += 1; // Reculer (vers +Z)
+        if (keys.a) moveDirection.x -= 1; // Gauche (vers -X)
+        if (keys.d) moveDirection.x += 1; // Droite (vers +X)
+
+        // Normalisation pour garder la même vitesse en diagonale
+        if (moveDirection.lengthSq() > 0) {
+            moveDirection.normalize();
+        }
+
+        // Accélération horizontal (X et Z)
+        velocity.x += moveDirection.x * acceleration * delta;
+        velocity.z += moveDirection.z * acceleration * delta;
+
+        // Application du frottement (Décélération progressive)
+        velocity.x -= velocity.x * friction * delta;
+        velocity.z -= velocity.z * friction * delta;
+
+        // Clamper la vitesse max horizontale
+        const horizontalSpeed = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+        if (horizontalSpeed > maxSpeed) {
+            velocity.x = (velocity.x / horizontalSpeed) * maxSpeed;
+            velocity.z = (velocity.z / horizontalSpeed) * maxSpeed;
+        }
+
+        // Gestion du saut (uniquement si au sol)
+        if (keys.space && isGrounded) {
+            velocity.y = jumpVelocity;
+            isGrounded = false;
+        }
+
+        // Application de la gravité
+        velocity.y += gravity * delta;
+
+        // Mise à jour de la position du cube
+        player.position.x += velocity.x * delta;
+        player.position.y += velocity.y * delta;
+        player.position.z += velocity.z * delta;
+
+        // Collision avec le sol
+        const minHeight = cubeSize / 2;
+        if (player.position.y <= minHeight) {
+            player.position.y = minHeight;
+            velocity.y = 0;
+            isGrounded = true;
+        }
+
         renderer.render(scene, camera);
     }
+
     animate();
 </script>
 
