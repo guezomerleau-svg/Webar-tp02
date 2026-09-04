@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TP02 - Web3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+    <!-- Importation de Three.js et OrbitControls via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<script>
+    // --- 1. INITIALISATION DE LA SCÈNE, CAMÉRA ET RENDU ---
+    const scene = new THREE.Scene();
+    
+    const camera = new THREE.PerspectiveCamera(
+        75, 
+        window.innerWidth / window.innerHeight, 
+        0.1, 
+        1000
+    );
+    camera.position.set(0, 5, 10);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true; // Activer les ombres
+    document.body.appendChild(renderer.domElement);
+
+    // --- 2. ÉCLAIRAGE ---
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(20, 40, 20);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    // --- 3. EXERCICE 1 : CREATION DU PLAN (SOL) ET SKYBOX ---
+    
+    // Chargement des textures via des URLs publiques
+    const textureLoader = new THREE.TextureLoader();
+
+    // A. Texture d'herbe avec répétition pour un rendu propre
+    const grassTexture = textureLoader.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg');
+    grassTexture.wrapS = THREE.RepeatWrapping;
+    grassTexture.wrapT = THREE.RepeatWrapping;
+    grassTexture.repeat.set(50, 50); // Répéter la texture sur le grand plan
+
+    // Création du plan horizontal (sol)
+    const planeSize = 100;
+    const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+    const planeMat = new THREE.MeshStandardMaterial({ map: grassTexture });
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = -Math.PI / 2; // Orienter le plan à l'horizontale
+    plane.receiveShadow = true;
+    scene.add(plane);
+
+    // B. Skybox (Image panoramique de ciel)
+    const skyTexture = textureLoader.load('https://threejs.org/examples/textures/22944123048_24a3b1029d_o.jpg');
+    const skyGeo = new THREE.SphereGeometry(500, 60, 40);
+    const skyMat = new THREE.MeshBasicMaterial({
+        map: skyTexture,
+        side: THREE.BackSide // Afficher la texture à l'intérieur de la sphère
+    });
+    const skybox = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(skybox);
+
+    // --- 4. REDIMENSIONNEMENT FENÊTRE ---
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // --- 5. BOUCLE DE RENDU ---
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
+    animate();
+</script>
+
+</body>
+</html>
